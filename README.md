@@ -1,17 +1,36 @@
 # ChainNet
 
 **There are three ways to access the ChainNet data:**
+
 1. By downloading [this JSON file](https://raw.githubusercontent.com/rowanhm/ChainNet/main/data/chainnet.json). 
 This file contains all of ChainNet is one place. 
 Details of its structure are given below. 
 2. By downloading one of three simplified versions, which contain only [metaphor](https://raw.githubusercontent.com/rowanhm/ChainNet/main/data/chainnet_simple/chainnet_metaphor.json), [metonymy](https://raw.githubusercontent.com/rowanhm/ChainNet/main/data/chainnet_simple/chainnet_metonymy.json), or [homonymy](https://raw.githubusercontent.com/rowanhm/ChainNet/main/data/chainnet_simple/chainnet_homonymy.json).
 These simplified versions exclude split and virtual senses, and have been designed to make it easy to access all of the examples of each phenomena without having to extract them yourselves. 
-3. By using the script `enhance.py` to make a version of Princeton WordNet (as packaged by the Open Multilingual Wordnet) with metaphor/metonym links added.  
-4. By looking at [this automatically-generated PDF](https://rowanhm.github.io/ChainNet/documentation/ChainNet_Data.pdf), which includes a graphical representation of each word in ChainNet, but does not include the feature transformations.
+3. By looking at [this automatically-generated PDF](https://rowanhm.github.io/ChainNet/documentation/ChainNet_Data.pdf), which includes a graphical representation of each word in ChainNet, but does not include the feature transformations.
 It can be useful if you want to reference the ChainNet annotation quickly for a word.
-
+4. By using the script `enhance.py` to make a version of Princeton WordNet (as packaged by the Open Multilingual Wordnet) with metaphor/metonym links added.  This can then be loaded and manipulated with `wn`.
+  ```python
+>>> import wn
+>>> wn.add('omw-en:1.4_cn.xml')
+Skipping omw-en:1.4.cn (OMW English Wordnet based on WordNet 3.0 with tropes from ChainNet); already added
+>>>
+>>> ewn=wn.Wordnet(lexicon='omw-en:1.4.cn')
+>>> 
+>>> for s in ewn.senses('chestnut'):
+...   print(s, s.relations())
+... 
+Sense('omw-en-chestnut-00373209-s') {'derivation': [Sense('omw-en-chestnut-04972350-n')]}
+Sense('omw-en-chestnut-12262905-n') {'has_metonym': [Sense('omw-en-chestnut-12262553-n')]}
+Sense('omw-en-chestnut-12262553-n') {'metonym': [Sense('omw-en-chestnut-12262905-n')], 'has_metonym': [Sense('omw-en-chestnut-07772274-n')]}
+Sense('omw-en-chestnut-07772274-n') {'metaphor': [Sense('omw-en-chestnut-02468504-n')], 'metonym': [Sense('omw-en-chestnut-12262553-n'), Sense('omw-en-chestnut-04972350-n')]}
+Sense('omw-en-chestnut-04972350-n') {'derivation': [Sense('omw-en-chestnut-00373209-s')], 'has_metonym': [Sense('omw-en-chestnut-07772274-n')], 'metonym': [Sense('omw-en-chestnut-02388735-n')]}
+Sense('omw-en-chestnut-02468504-n') {'has_metaphor': [Sense('omw-en-chestnut-07772274-n')]}
+Sense('omw-en-chestnut-02388735-n') {'has_metonym': [Sense('omw-en-chestnut-04972350-n')]}
+>>> 
+```
 In Python, JSON files can be opened trivially using the `json` library, e.g.
-```angular2html
+```python
 import json
 
 with open("data/chainnet.json", "r") as fp:
