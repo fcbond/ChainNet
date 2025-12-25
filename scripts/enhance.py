@@ -33,41 +33,26 @@ from pathlib import Path
 from typing import Any
 
 import wn
+from wn.compat import sensekey
 
 # Default paths
 DEFAULT_WORDNET = 'omw-en:1.4'
 DEFAULT_WN_DATA = 'wn_data'
 DEFAULT_CHAINNET = Path(__file__).parent.parent / "data" / "chainnet_simple"
-DEFAULT_OUTPUT = f"{DEFAULT_WORDNET}_cn.xml"
 
-tropes = ['metaphor', 'metonymy']
-reverses =  {'metaphor':'has_metaphor',
-             'metonym':'has_metonym' }
+TROPES = ['metaphor', 'metonymy']
+REVERSES = {'metaphor': 'has_metaphor',
+            'metonym': 'has_metonym'}
 
 
 def load_chainnet_tropes(path: Path) -> dict[str, Any]:
     """Load ChainNet JSON data."""
-    tropes = ['metaphor', 'metonymy']
-
     data = {}
-    for trope in tropes:
-        path = DEFAULT_CHAINNET / f"chainnet_{trope}.json"
-        with open(path, "r", encoding="utf-8") as f:
+    for trope in TROPES:
+        trope_path = path / f"chainnet_{trope}.json"
+        with open(trope_path, "r", encoding="utf-8") as f:
             data[trope] = json.load(f)
     return data
-
-def get_map(lex_spec: str, pos='n'):
-    """
-    get a mapping from chainnet id to wordnet_sense
-    """
-    my_wn = wn.Wordnet(lexicon=lex_spec)
-    skey = dict()
-    if lex_spec == 'omw-en:1.4':
-        for s in my_wn.senses(pos='n'):
-            skey[s.metadata()['identifier']] = s.id
-    else:
-        "I don't know how to map to this wordnet"
-    return skey
 
 
 def extract_relations(chainnet_data: dict[str, Any]) -> list[tuple[str, str, str, str]]:
@@ -122,9 +107,6 @@ def enhance_wordnet(
     if verbose:
         print(f"Loading ChainNet from {chainnet_path}...")
     chainnet_data = load_chainnet_tropes(chainnet_path)
-    if verbose:
-        print(f"Loading sense mapping from {lexicon_spec}...")
-    skey = get_map(lexicon_spec)
 
     # Extract relations
     if verbose:
@@ -141,13 +123,6 @@ def enhance_wordnet(
     if verbose:
         print(f"Loading WordNet '{lexicon_spec}'...")
     
-    # Parse lexicon spec (e.g., 'omw-en:1.4' or 'oewn:2024')
-    if ':' in lexicon_spec:
-        lex_id, version = lexicon_spec.split(':', 1)
-    else:
-        lex_id = lexicon_spec
-        version = None
-    
     # Try to download if not present
     try:
         # wn.Wordnet() takes the lexicon spec as a single string
@@ -157,7 +132,15 @@ def enhance_wordnet(
             print(f"Downloading {lexicon_spec}...")
         wn.download(lexicon_spec)
         wordnet = wn.Wordnet(lexicon=lexicon_spec)
-    
+
+    if verbose:
+        print(f"Loading sense mapping from {lexicon_spec}...")
+    try:
+        get_sense = sensekey.sense_getter(lexicon_spec)
+    except Exception as e:
+        print(f"Error: Cannot create sense mapping for {lexicon_spec}: {e}", file=sys.stderr)
+        sys.exit(1)
+
     # Load into editor
     if verbose:
         print("Loading lexicon into editor...")
@@ -179,11 +162,15 @@ def enhance_wordnet(
     if verbose:
         print("Adding relations...")
 
-    for  rel_type, word, source_key, target_key in relations:
+    for rel_type, _, source_key, target_key in relations:
         # Resolve sense keys to wn sense IDs
-        source_id = skey.get(source_key, None)
-        target_id = skey.get(target_key, None)
-        
+        source_id = get_sense(source_key)
+        if source_id:
+            source_id = source_id.id
+        target_id = get_sense(target_key)
+        if target_id:
+            target_id =  target_id.id 
+
         if source_id is None or target_id is None:
             skipped_count += 1
             if verbose and skipped_count <= 10:
@@ -202,13 +189,13 @@ def enhance_wordnet(
         ## reverse
         try:
             editor.add_sense_relation(target_id, source_id,
-                                      reverses[rel_type],
+                                      REVERSES[rel_type],
                                       validate=False)
             reverse_count += 1
         except Exception as e:
             skipped_reverse += 1
             if verbose:
-                print(f"  Error adding {target_key} -{reverses[rel_type]}-> {source_key}: {e}")
+                print(f"  Error adding {target_key} -{REVERSES[rel_type]}-> {source_key}: {e}")
 
 
 
@@ -218,6 +205,7 @@ def enhance_wordnet(
         print(f"Added {reverse_count} reverse relations, skipped {skipped_reverse}")
         
     # Export
+    
     if verbose:
         print(f"Exporting to {output_path}...")
     editor.export(output_path)
@@ -266,8 +254,8 @@ Examples:
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=DEFAULT_OUTPUT,
-        help=f"Output path for enhanced WordNet XML (default: {DEFAULT_OUTPUT})"
+        default=None,
+        help="Output path for enhanced WordNet XML (default: <wordnet>.cn.xml)"
     )
     
     parser.add_argument(
@@ -277,6 +265,12 @@ Examples:
     )
     
     args = parser.parse_args()
+    
+    # Set default output path if not specified
+    if args.output is None:
+        output_path = Path(f"{args.wordnet}.cn.xml")
+    else:
+        output_path = args.output
     
     # Check chainnet file exists
     if not args.chainnet.exists():
@@ -288,6 +282,6 @@ Examples:
         lexicon_spec=args.wordnet,
         wn_data_dir=args.wn_data,
         chainnet_path=args.chainnet,
-        output_path=args.output,
+        output_path=output_path,
         verbose=args.verbose
     )
